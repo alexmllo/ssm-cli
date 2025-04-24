@@ -1,72 +1,64 @@
 import argparse
 
 def build_parser():
-    parser = argparse.ArgumentParser(prog="ssm", description="Interact with EC2 via SSM")
-    subparsers = parser.add_subparsers(dest="command")
-
-    # List instances command
-    list_parser = subparsers.add_parser("list-instances", help="List EC2 instances")
-    list_parser.add_argument(
-        "--profile",
-        help="AWS profile to use",
+    parser = argparse.ArgumentParser(
+        description="🛠️ ssm-cli: Simplified AWS SSM EC2 interaction",
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog="""Examples:
+  ssm.py send-command -p myprofile -i i-123456 -c "uptime"
+  ssm.py port-forward -p myprofile -i web-server -P 8080:80
+  ssm.py port-forward-remote -p myprofile -i db-server -P 3306:3306 -d 127.0.0.1
+  ssm.py -p devprofile        # Opens interactive SSM session
+"""
     )
 
-    # Connect (SSM shell)
-    connect_parser = subparsers.add_parser("connect", help="Connect to an EC2 instance via SSM")
-    connect_parser.add_argument(
-        "--instance_id",
-        help="The ID of the EC2 instance to connect to",
-        required=True
-    )
-    connect_parser.add_argument(
-        "--profile",
-        help="AWS profile to use",
-    )
-
-    # Send command
-    send_command_parser = subparsers.add_parser("send-command", help="Send a command to an EC2 instance")
-    send_command_parser.add_argument(
-        "--instance_id",
-        help="The ID of the EC2 instance to send the command to",
-    )
-    send_command_parser.add_argument(
-        "--command",
-        help="The command to send to the EC2 instance",
-        required=True
-    )
-    send_command_parser.add_argument(
-        "--profile",
-        help="AWS profile to use",
+    parser.add_argument(
+        "command",
+        metavar="COMMAND",
+        help="Available commands:\n"
+             "  send-command         Run a shell command on an instance\n"
+             "  port-forward         Start local port forwarding to an instance\n"
+             "  port-forward-remote  Forward a port from the instance to another destination\n"
+             "\nIf omitted, opens an interactive shell via SSM.",
+        choices=["send-command", "port-forward", "port-forward-remote"],
+        nargs="?",
+        default=None
     )
 
-    # Port forwarding
-    port_forward_parser = subparsers.add_parser("port-forward", help="Set up port forwarding to an EC2 instance")
-    port_forward_parser.add_argument(
-        "--instance_id",
-        help="The ID of the EC2 instance to forward ports to",
-        required=True
+    parser.add_argument(
+        "-i", "--instance",
+        help="EC2 instance ID or Name (optional if you want to pick manually)",
+        required=False,
     )
-    port_forward_parser.add_argument(
-        "--local_port",
-        help="The local port to forward to the EC2 instance",
-        type=int,
-        required=True
-    )
-    port_forward_parser.add_argument(
-        "--remote_port",
-        help="The remote port on the EC2 instance to forward to",
-        type=int,
-        required=True
-    )
-    port_forward_parser.add_argument(
-        "--profile",
-        help="AWS profile to use",
-    )
-    # Update list-instances
-    list_parser.add_argument('--tag', help='Filter by tag (e.g., Name=backend)')
-    list_parser.add_argument('--search', help='Fuzzy search by name or ID')
 
-    # List profiles
-    subparsers.add_parser("list-profiles", help="List AWS profiles")
+    parser.add_argument(
+        "-p", "--profile",
+        help="AWS named profile to use (required)",
+        required=True
+    )
+
+    parser.add_argument(
+        "-P", "--port",
+        help="Port mapping for forwarding, format: LOCAL:REMOTE (e.g. 8080:80)",
+        required=False
+    )
+
+    parser.add_argument(
+        "-d", "--destination",
+        help="Destination IP or hostname for remote port-forwarding (e.g. 127.0.0.1)",
+        required=False
+    )
+
+    parser.add_argument(
+        "-c", "--shell_comand",
+        help="Shell command to send to the instance (e.g. 'uptime')",
+        required=False
+    )
+
+    parser.add_argument(
+        "-r", "--region",
+        help="AWS region to use (defaults to profile's region)",
+        required=False
+    )
 
     return parser
