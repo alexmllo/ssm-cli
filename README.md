@@ -2,13 +2,13 @@
 ssm is a lightweight Python CLI tool to interact with AWS EC2 instances over Systems Manager (SSM). It helps you quickly list, connect to, and manage EC2 instances using AWS named profiles, with support for session persistence (remembers your last-used profile and instance).
 
 ## 🚀 Features
-- 🔍 List EC2 instances with optional filters
-
 - 🔌 Connect to an instance via AWS SSM
 
 - 📦 Send commands to a remote instance
 
 - 🔁 Port forwarding through SSM tunnel
+
+- 🔁 Port forwarding to remote host through SSM tunnel
 
 ---
 
@@ -38,68 +38,51 @@ Now you can run ssm from anywhere!
 ```bash
 ssm [COMMAND] [OPTIONS]
 ```
+Available commands:
+
+- `send-command` – Run a shell command on an instance
+
+- `port-forward` – Start local port forwarding
+
+- `port-forward-remote` – Forward a port from the instance to another destination
+
+- (none) – If no command is given, opens an interactive SSM shell
 
 ## 📄 List EC2 Instances
 ```bash
 ssm list-instances --profile myprofile
 ```
-Optional filters:
-
-- `--tag Name=web` – filter by tag
-
-- `--search "webserver"` – fuzzy search by name or ID
-
----
-
-## 🔌 Connect to an EC2 Instance via SSM
-
-```bash
-ssm connect --instance-id i-0abcd1234efgh5678 --profile myprofile
-```
-
-If you omit `--instance-id`, it will use the last connected instance.
 
 ## 📦 Send a Command
 
 ```bash
-ssm send-command --instance-id i-0abcd1234efgh5678 --command "uptime" --profile myprofile
+ssm send-command --instance i-0abcd1234efgh5678 --command "uptime" --profile myprofile
 ```
 
 ## 🔁 Port Forwarding
 Forward local port 8080 to remote port 3000:
 ```bash
-ssm port-forward --instance-id i-0abcd1234efgh5678 --local-port 8080 --remote-port 3000 --profile myprofile
+ssm port-forward -i i-0abcd1234efgh5678 --local-port 8080 --remote-port 3000 --profile myprofile
 ```
 
-## 📋 List AWS Named Profiles
-
+## 🔁 Port Forwarding to remote host
+Forward local port to remote port and host via an instance:
 ```bash
-ssm list-profiles
+ssm port-forward-remote --instance i-0abcd1234efgh5678 --local-port 8080 --remote-port 3000 --host host --profile myprofile
 ```
 
 ---
 
-## 🧠 Session Memory
-This tool remembers your last-used:
-
-- AWS named profile
-
-- EC2 instance ID
-
-So you can omit them in future commands for convenience.
-
----
 
 ## 📁 Project Structure
 
 ```bash
 ssm/
-├── cli.py          # Argument parser setup
-├── main.py         # CLI entrypoint (contains main logic)
+├── cli.py
+├── main.py
 ├── utils/
-│   └── ec2.py      # EC2 + SSM utility functions
-├── config.py       # Stores/retrieves last-used profile & instance
-├── Makefile        # Optional CLI installer
+│   └── ec2.py
+├── Makefile
 ├── requirements.txt
 └── README.md
 ```
@@ -108,11 +91,11 @@ ssm/
 
 ## 🧪 Example Workflow
 ```bash
-ssm list-profiles
-ssm list-instances --profile dev
-ssm connect --instance-id i-1234567890abcdef
-ssm send-command --command "df -h"
-ssm port-forward --local-port 8080 --remote-port 8000
+ssm -p prifle-name
+ssm connect -i i-1234567890abcdef
+ssm send-command -i instance_name --command "df -h"
+ssm port-forward -i instance_id --local-port 8080 --remote-port 8000
+ssm port-forward-remote -i instance_id --local-port 8080 --remote-port 8000 --host host_name
 ```
 
 ## 📜 License
