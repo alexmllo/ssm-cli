@@ -55,29 +55,34 @@ def main():
     profile = args.profile
     client : ec2.EC2Client = ec2.EC2Client(profile=profile, region=args.region)
 
+    instances_ids = []
     if args.command == "send-command":
         if not args.shell_comand:
-            print("❌ERROR: Shell command is required for send-command.")
-            sys.exit(1)
+            parser.error("❌ERROR: Shell command is required for send-command.")
+        if not args.instances:
+            parser.error("❌ERROR: At least one instance is required for send-command.")
 
         # Resolve instance
-        if args.instance:
-            if args.instance.startswith("i-"):
-                instance_id = args.instance  # looks like an EC2 instance ID
+        for instance in args.instances:
+            if instance.startswith("i-"):
+                instances_ids.append(instance)
             else:
-                instance_id = client.get_instance_id_by_name(args.instance)
-                if not instance_id:
-                    print(f"❌ERROR: No instance found with name '{args.instance}'.")
+                instance_id = client.get_instance_id_by_name(instance)
+                if instance_id:
+                    instances_ids.append(instance_id)
+                else:
+                    print(f"❌ERROR: No instance found with name '{instance}'.")
                     sys.exit(1)
-        else:
-            instance_id = select_instance(client)
 
-        client.send_command(instance_id, args.shell_comand)
+        client.send_command(instances_ids, args.shell_comand)
 
     elif args.command == "port-forward":
         if not args.port:
             print("❌ERROR: Ports are required for port-forward.")
             sys.exit(1)
+        
+        if args.instances > 1:
+            parser.error("❌ERROR: Only one instance is allowed for port-forward.")
 
         # Vlidate port format
         if ":" not in args.port:
@@ -91,13 +96,14 @@ def main():
             sys.exit(1)
 
         # Resolve instance
-        if args.instance:
-            if args.instance.startswith("i-"):
-                instance_id = args.instance
+        if args.instances:
+            instance = args.instances[0]
+            if instance.startswith("i-"):
+                instance_id = args.instances
             else:
-                instance_id = client.get_instance_id_by_name(args.instance)
+                instance_id = client.get_instance_id_by_name(instance)
                 if not instance_id:
-                    print(f"❌ERROR: No instance found with name '{args.instance}'.")
+                    print(f"❌ERROR: No instance found with name '{instance}'.")
                     sys.exit(1)
         else:
             instance_id = select_instance(client)
@@ -108,6 +114,9 @@ def main():
         if not args.port or not args.destination:
             print("❌ERROR: Ports and destination are required for port-forward-remote.")
             sys.exit(1)
+
+        if args.instances > 1:
+            parser.error("❌ERROR: Only one instance is allowed for port-forward-remote.")
         
         # Validate port format
         if ":" not in args.port:
@@ -121,13 +130,14 @@ def main():
             sys.exit(1)
         
         # Resolve instance
-        if args.instance:
-            if args.instance.startswith("i-"):
-                instance_id = args.instance
+        if args.instances:
+            instance = args.instances[0]
+            if instance.startswith("i-"):
+                instance_id = instance
             else:
-                instance_id = client.get_instance_id_by_name(args.instance)
+                instance_id = client.get_instance_id_by_name(instance)
                 if not instance_id:
-                    print(f"❌ERROR: No instance found with name '{args.instance}'.")
+                    print(f"❌ERROR: No instance found with name '{instance}'.")
                     sys.exit(1)
         else:
             instance_id = select_instance(client)
@@ -137,7 +147,20 @@ def main():
     elif args.command == None:
 
         # If no command is specified, select an instance and open a shell on it
-        instance_id = select_instance(client)
+        if not args.instances:
+            instance_id = select_instance(client)
+
+        if len(args.instances) > 1:
+            parser.error("❌ERROR: Either one or none instance is allowed for interactive shell.")
+
+        if len(args.instances) == 1:
+            if args.instances[0].startswith("i-"):
+                instance_id = args.instances[0]
+            else:
+                instance_id = client.get_instance_id_by_name(instance_id)
+                if not instance_id:
+                    print(f"❌ERROR: No instance found with name '{instance_id}'.")
+                    sys.exit(1)
 
         # Open a shell on the selected instance (you can implement this if needed)
         print(f"Opening shell on instance {instance_id}...")

@@ -1,14 +1,12 @@
 # 🔧 ssm – Simple EC2 SSM CLI
-ssm is a lightweight Python CLI tool to interact with AWS EC2 instances over Systems Manager (SSM). It helps you quickly list, connect to, and manage EC2 instances using AWS named profiles, with support for session persistence (remembers your last-used profile and instance).
+ssm is a lightweight Python CLI tool to interact with AWS EC2 instances over Systems Manager (SSM). It helps you quickly list, connect to, and manage EC2 instances using AWS named profiles.
 
 ## 🚀 Features
-- 🔌 Connect to an instance via AWS SSM
-
-- 📦 Send commands to a remote instance
-
+- 🔌 Connect to EC2 instances via AWS SSM (interactive shell)
+- 📦 Send commands to one or more EC2 instances in parallel
+- 📊 Live progress bars and output summaries for batch commands
 - 🔁 Port forwarding through SSM tunnel
-
-- 🔁 Port forwarding to remote host through SSM tunnel
+- 🛰️ Forward to remote hosts via the EC2 tunnel
 
 ---
 
@@ -27,6 +25,7 @@ pip install -r requirements.txt
 
 3. (Optional) Install the CLI globally:
 ```bash
+make build
 make install
 ```
 
@@ -35,9 +34,15 @@ Now you can run ssm from anywhere!
 ---
 
 ## 🧑‍💻 Usage
+If not globally installed:
+```bash
+python3 ssm.py [COMMAND] [OPTIONS]
+```
+If installed globally:
 ```bash
 ssm [COMMAND] [OPTIONS]
 ```
+
 Available commands:
 
 - `send-command` – Run a shell command on an instance
@@ -48,25 +53,24 @@ Available commands:
 
 - (none) – If no command is given, opens an interactive SSM shell
 
-## 📄 List EC2 Instances
-```bash
-ssm list-instances --profile myprofile
-```
-
 ## 📦 Send a Command
-
+Run a shell command on one or more instances:
 ```bash
-ssm send-command --instance i-0abcd1234efgh5678 --command "uptime" --profile myprofile
+ssm send-command -i i-0123 i-0456 -p myprofile -c 'echo "hello world"'
+```
+You can also pass instance names (resolved by tag Name):
+```bash
+ssm send-command -i instance-name-1 instance-name-2 -p myprofile -c "uptime"
 ```
 
 ## 🔁 Port Forwarding
-Forward local port 8080 to remote port 3000:
+Forward a local port to the EC2 instance:
 ```bash
 ssm port-forward -i i-0abcd1234efgh5678 --local-port 8080 --remote-port 3000 --profile myprofile
 ```
 
 ## 🔁 Port Forwarding to remote host
-Forward local port to remote port and host via an instance:
+Forward local port to a remote host:port via the EC2 instance:
 ```bash
 ssm port-forward-remote --instance i-0abcd1234efgh5678 --local-port 8080 --remote-port 3000 --host host --profile myprofile
 ```
@@ -89,13 +93,7 @@ ssm/
 
 ---
 
-## 🧪 Example Workflow
-```bash
-ssm -p prifle-name
-ssm connect -i i-1234567890abcdef
-ssm send-command -i instance_name --command "df -h"
-ssm port-forward -i instance_id --local-port 8080 --remote-port 8000
-ssm port-forward-remote -i instance_id --local-port 8080 --remote-port 8000 --host host_name
+
 ```
 
 ## 📜 License
