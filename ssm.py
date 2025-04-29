@@ -1,5 +1,7 @@
 import sys
 from threading import local
+
+import boto3
 from cli import build_parser
 import utils.ec2 as ec2
 import readline
@@ -52,9 +54,20 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
 
-    profile = args.profile
+    # CHECK PROFILE
+    available_profiles = boto3.Session().available_profiles
+
+    if args.profile in available_profiles:
+        profile = args.profile
+    else:
+        print(f"❌ ERROR: Profile '{args.profile}' not found in available AWS profiles.")
+        print(f"Available profiles: {', '.join(available_profiles)}")
+        parser.print_help()
+        sys.exit(1)
+
     client : ec2.EC2Client = ec2.EC2Client(profile=profile, region=args.region)
 
+    # SEND COMMAND
     instances_ids = []
     if args.command == "send-command":
         if not args.shell_comand:
@@ -76,6 +89,7 @@ def main():
 
         client.send_command(instances_ids, args.shell_comand)
 
+    # PORT FORWARD
     elif args.command == "port-forward":
         if not args.port:
             print("❌ERROR: Ports are required for port-forward.")
@@ -110,6 +124,7 @@ def main():
 
         client.port_forwarding_to_inst(instance_id, remote_port, local_port)
 
+    # PORT FORWARD REMOTE
     elif args.command == "port-forward-remote":
         if not args.port or not args.destination:
             print("❌ERROR: Ports and destination are required for port-forward-remote.")
@@ -144,8 +159,8 @@ def main():
         
         client.port_forwarding_to_remote_host(instance_id, args.destination, remote_port, local_port)
 
+    # LIST INSTANCES OF A PROFILE
     elif args.command == None:
-
         # If no command is specified, select an instance and open a shell on it
         if not args.instances:
             instance_id = select_instance(client)
