@@ -1,6 +1,9 @@
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from curses import intrflush
+from tqdm import tqdm
 import os
 import sys
+import threading
 import boto3
 import subprocess
 from botocore.configloader import load_config
@@ -122,6 +125,22 @@ class EC2Client:
                 return instance["InstanceId"]
 
         return None
+    
+    def get_instance_name_by_id(self, instance_id: str) -> str | None:
+        """
+        Returns the Name tag of the EC2 instance with the given ID.
+        """
+        response = self.ec2.describe_instances(
+            InstanceIds=[instance_id]
+        )
+
+        for reservation in response.get("Reservations", []):
+            for instance in reservation.get("Instances", []):
+                for tag in instance.get("Tags", []):
+                    if tag["Key"] == "Name":
+                        return tag["Value"]
+
+        return None
 
     def connect_to_instance(self, instance_id: str) -> None:
         """
@@ -148,47 +167,101 @@ class EC2Client:
             sys.exit(1)
 
     
-    def send_command(self, instance_id: str, command: str) -> None:
-        """
-        Sends a shell command to the specified EC2 instance via AWS SSM.
-
-        :param instance_id: The ID of the EC2 instance.
-        :param command: The shell command to execute.
-        :return: The response from the send_command API call.
-        """
+    def send_command(self, instance_ids: list[str], command: str) -> None:
         try:
             response = self.ssm.send_command(
-                InstanceIds=[instance_id],
+                InstanceIds=instance_ids,
                 DocumentName="AWS-RunShellScript",
                 Parameters={"commands": [command]},
             )
-            self.process_command_response(response["Command"]["CommandId"])
+            command_id = response["Command"]["CommandId"]
+            print(f"Running command: {command}")
+            print(f"Command ID: {command_id}\n")
+            print(f"On instances: {', '.join(instance_ids)}")
+            print("")
+            procede: str = input("➡️  Do you want to proceed? (y/n): ")
+            if procede.lower() != "y":
+                print("❌ Command execution aborted.")
+                sys.exit(1)
+            print("")
+            print("🔄 Waiting for command to finish on instances...")
+
+            lock = threading.Lock()
+            output_results = []
+            progress_bars = {}
+
+            # Create tqdm bars
+            for idx, inst_id in enumerate(instance_ids):
+                progress_bars[inst_id] = tqdm(
+                    total=1, desc=f"⏳ {inst_id}", position=idx, leave=False
+                )
+
+            def process_one(instance_id):
+                # Wait for command to finish
+                self.wait_for_command(command_id, instance_id)
+
+                # Retrieve command output
+                try:
+                    result = self.ssm.get_command_invocation(
+                        CommandId=command_id,
+                        InstanceId=instance_id
+                    )
+                    output = result["StandardOutputContent"].strip()
+                except Exception as e:
+                    output = f"❌ Error retrieving output: {e}"
+
+                # Complete progress bar
+                progress_bars[instance_id].update(1)
+
+                # Save output (thread-safe)
+                with lock:
+                    output_results.append((instance_id, output))
+
+            # Start thread pool
+            with ThreadPoolExecutor(max_workers=min(10, len(instance_ids))) as executor:
+                futures = [executor.submit(process_one, inst_id) for inst_id in instance_ids]
+                for future in as_completed(futures):
+                    future.result()
+
+            # Move cursor below the last progress bar
+            print("\n" * len(instance_ids))
+
+            # Print outputs in order
+            for instance_id, output in output_results:
+                instance_name = self.get_instance_name_by_id(instance_id)
+                print(f"📦 Output from {instance_id} | {instance_name}:\n{output}\n")
+
         except botocore.exceptions.ClientError as e:
             print(f"❌ERROR: Failed to send command: {e}")
             sys.exit(1)
 
-    def process_command_response(self, command_id: str) -> None:
+    def wait_for_command(self, command_id: str, instance_id: str):
         """
-        Processes the response of a command sent to an EC2 instance.
+        Waits for the command to complete on the specified instance.
+        """
+        waiter = self.ssm.get_waiter("command_executed")
+        try:
+            waiter.wait(
+                CommandId=command_id,
+                InstanceId=instance_id,
+                WaiterConfig={"Delay": 5, "MaxAttempts": 10}
+            )
+        except botocore.exceptions.WaiterError:
+            raise RuntimeError(f"Command execution timed out on instance {instance_id}")
 
-        :param command_id: The ID of the command to process.
+    def get_command_output(self, command_id: str, instance_id: str) -> tuple[str, str]:
+        """
+        Retrieves the output and error from the executed command on a given instance.
         """
         try:
             response = self.ssm.get_command_invocation(
                 CommandId=command_id,
-                InstanceId=self.instance_id
+                InstanceId=instance_id
             )
-            print(f"Command output: {response['StandardOutputContent']}")
-            print(f"Command error: {response['StandardErrorContent']}")
-        except botocore.exceptions.ClientError as e:
-            print(f"❌ERROR: Failed to get command invocation: {e}")
-            sys.exit(1)
-        except botocore.exceptions.InvalidInstanceId:
-            print(f"❌ERROR: Invalid instance ID: {self.instance_id}")
-            sys.exit(1)
-        except botocore.exceptions.InvalidCommandId:
-            print(f"❌ERROR: Invalid command ID: {command_id}")
-            sys.exit(1)
+            return response.get('StandardOutputContent', ''), response.get('StandardErrorContent', '')
+        except Exception as e:
+            raise RuntimeError(f"Failed to get output from {instance_id}: {e}")
+
 
     def port_forwarding_to_inst(self, instance_id: str, remotePort: int, LocalPortNumber: intrflush) -> None:
         """

@@ -26,9 +26,11 @@ def build_parser():
     )
 
     parser.add_argument(
-        "-i", "--instance",
-        help="EC2 instance ID or Name (optional if you want to pick manually)",
-        required=False,
+        "-i", "--instances",
+        help="EC2 instance ID(s) or Name(s) (optional if you want to pick manually)",
+        nargs="+",
+        default=[],
+        required=False
     )
 
     parser.add_argument(
