@@ -342,7 +342,7 @@ class EC2Client:
 
     def get_instance_public_dns(self, instance_id: str) -> str | None:
         """
-        Returns the public IP address of the EC2 instance with the given ID.
+        Returns the public DNS of the EC2 instance with the given ID.
         """
         response = self.ec2.describe_instances(
             InstanceIds=[instance_id]

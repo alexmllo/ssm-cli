@@ -82,7 +82,7 @@ ssm send-command -i i-0123 i-0456 -p myprofile -c 'echo "hello world"'
 
 Port forwarding:
 ```bash
-ssm port-forward -i i-0abcd1234efgh5678 -p 8080:3000 --profile myprofile
+ssm port-forward -i i-0abcd1234efgh5678 -P 8080:3000 --profile myprofile
 ```
 
 SSH connection:

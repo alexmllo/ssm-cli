@@ -9,7 +9,7 @@ def build_parser():
   ssm.py port-forward -p myprofile -i web-server -P 8080:80
   ssm.py port-forward-remote -p myprofile -i db-server -P 3306:3306 -d 127.0.0.1
   ssm.py ssh -p myprofile -i web-server
-  ssm.py scp-to -p myprofile -i web-server -l /local/file.txt -r /remote/file.txt
+  ssm.py scp-to -p myprofile -i web-server -lp /local/file.txt -rp /remote/file.txt
   ssm.py scp-from -p myprofile -i web-server -lp /local/file.txt -rp /remote/file.txt
 """
     )
