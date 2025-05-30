@@ -87,7 +87,7 @@ def main():
                     print(f"❌ERROR: No instance found with name '{instance}'.")
                     sys.exit(1)
 
-        client.send_command(instances_ids, args.shell_comand, args.user)
+        client.send_command(instances_ids, args.shell_comand)
 
     # SSH
     elif args.command == "ssh":
