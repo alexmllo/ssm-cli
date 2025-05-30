@@ -72,13 +72,24 @@ class EC2Client:
 
     @staticmethod
     def get_source_profile(profile: str) -> str:
-        config_path = os.path.expanduser("~/.aws/config")
-        config = load_config(config_path)
-        section = f"profile {profile}" if profile != "default" else "default"
-        return config.get(section, {}).get("source_profile", profile)
+        """
+        Retrieves the source profile from the AWS credentials file.
+
+        :param profile: The profile name to check for source profile.
+        :return: The source profile name.
+        """
+        config_path = os.path.expanduser("~/.aws/credentials")
+        credentials = load_config(config_path)
+        section = profile if profile != "default" else "default"
+        return credentials.get(section, {}).get("source_profile", profile)
 
     @staticmethod
     def login_to_source_profile(profile: str) -> None:
+        """
+        Logs in to the source profile using AWS SSO.
+
+        :param profile: The profile name to use for login.
+        """
         profile_name = EC2Client.get_source_profile(profile)
         try:
             subprocess.run(["aws", "sso", "login", "--profile", profile_name], check=True)
@@ -94,11 +105,7 @@ class EC2Client:
         :param region: The AWS region to query (default is 'us-east-1').
         :return: A list of EC2 instances (dictionaries) in the region.
         """
-        # Create an EC2 client
-        ec2_client = self.ec2
-        
-        # Retrieve all instances (you can add filters if needed)
-        response = ec2_client.describe_instances()
+        response = self.ec2.describe_instances()
 
         # Extract instances from the response
         instances = []
@@ -112,6 +119,8 @@ class EC2Client:
     def get_instance_id_by_name(self, name: str) -> str | None:
         """
         Returns the instance ID of the first running EC2 instance matching the given Name tag.
+        :param name: The Name tag of the EC2 instance.
+        :return: The instance ID of the EC2 instance.
         """
         response = self.ec2.describe_instances(
             Filters=[
@@ -129,6 +138,8 @@ class EC2Client:
     def get_instance_name_by_id(self, instance_id: str) -> str | None:
         """
         Returns the Name tag of the EC2 instance with the given ID.
+        :param instance_id: The ID of the EC2 instance.
+        :return: The Name tag of the EC2 instance.
         """
         response = self.ec2.describe_instances(
             InstanceIds=[instance_id]
@@ -168,6 +179,12 @@ class EC2Client:
 
     
     def send_command(self, instance_ids: list[str], command: str) -> None:
+        """
+        Sends a command to the specified EC2 instances using AWS SSM.
+
+        :param instance_ids: A list of EC2 instance IDs to send the command to.
+        :param command: The command to send to the instances.
+        """
         try:
             response = self.ssm.send_command(
                 InstanceIds=instance_ids,
@@ -238,6 +255,8 @@ class EC2Client:
     def wait_for_command(self, command_id: str, instance_id: str):
         """
         Waits for the command to complete on the specified instance.
+        :param command_id: The ID of the command to wait for.
+        :param instance_id: The ID of the instance to wait for.
         """
         waiter = self.ssm.get_waiter("command_executed")
         try:
@@ -252,6 +271,9 @@ class EC2Client:
     def get_command_output(self, command_id: str, instance_id: str) -> tuple[str, str]:
         """
         Retrieves the output and error from the executed command on a given instance.
+        :param command_id: The ID of the command to retrieve output for.
+        :param instance_id: The ID of the instance to retrieve output for.
+        :return: A tuple containing the output and error from the command.
         """
         try:
             response = self.ssm.get_command_invocation(
@@ -316,4 +338,135 @@ class EC2Client:
             print(f"✅ Session ended successfully.")
         except subprocess.CalledProcessError:
             print(f"❌ERROR: Failed to set up port forwarding")
+            sys.exit(1)
+
+    def get_instance_public_dns(self, instance_id: str) -> str | None:
+        """
+        Returns the public DNS of the EC2 instance with the given ID.
+        """
+        response = self.ec2.describe_instances(
+            InstanceIds=[instance_id]
+        )
+
+        for reservation in response.get("Reservations", []):
+            for instance in reservation.get("Instances", []):
+                return instance.get("PublicDnsName")
+
+        return None
+
+    def ssh_to_instance(self, instance_id: str, key_path: str | None = None, user: str = "ubuntu") -> None:
+        """
+        Opens an SSH session to the specified EC2 instance using the provided key file or SSH config.
+
+        :param instance_id: The ID of the EC2 instance.
+        :param key_path: Optional path to the SSH private key file. If not provided, will use SSH config.
+        :param user: The username to connect with (defaults to 'ubuntu').
+        """
+        try:
+            # Get the instance's public DNS
+            public_dns = self.get_instance_public_dns(instance_id)
+            if not public_dns:
+                print(f"❌ERROR: Could not find public DNS for instance {instance_id}")
+                sys.exit(1)
+
+            print(f"🔗 Connecting to instance {instance_id} via SSH...")
+            print(f"📡 Using DNS: {public_dns}")
+            print(f"👤 User: {user}")
+
+            # Construct the SSH command
+            ssh_command = ["ssh"]
+            
+            # Add key file if provided
+            if key_path:
+                print(f"🔑 Using key file: {key_path}")
+                ssh_command.extend(["-i", key_path])
+            
+            # Add the connection string
+            ssh_command.append(f"{user}@{public_dns}")
+
+            # Execute the SSH command
+            subprocess.run(ssh_command, check=True)
+            print(f"✅ SSH session ended successfully.")
+        except subprocess.CalledProcessError:
+            print(f"❌ERROR: Failed to establish SSH connection")
+            sys.exit(1)
+
+    def scp_to_instance(self, instance_id: str, local_path: str, remote_path: str, key_path: str | None = None, user: str = "ubuntu") -> None:
+        """
+        Transfers a file from local machine to the EC2 instance using SCP.
+
+        :param instance_id: The ID of the EC2 instance.
+        :param local_path: Path to the local file to transfer.
+        :param remote_path: Path where the file should be saved on the instance.
+        :param key_path: Optional path to the SSH private key file. If not provided, will use SSH config.
+        :param user: The username to connect with (defaults to 'ubuntu').
+        """
+        try:
+            # Get the instance's public DNS
+            public_dns = self.get_instance_public_dns(instance_id)
+            if not public_dns:
+                print(f"❌ERROR: Could not find public DNS for instance {instance_id}")
+                sys.exit(1)
+
+            print(f"📤 Transferring file to instance {instance_id}...")
+            print(f" User: {user}")
+            print(f"📁 Local path: {local_path}")
+            print(f"📁 Remote path: {remote_path}")
+
+            # Construct the SCP command
+            scp_command = ["scp"]
+            
+            # Add key file if provided
+            if key_path:
+                print(f"🔑 Using key file: {key_path}")
+                scp_command.extend(["-i", key_path])
+            
+            # Add the source and destination
+            scp_command.extend([local_path, f"{user}@{public_dns}:{remote_path}"])
+
+            # Execute the SCP command
+            subprocess.run(scp_command, check=True)
+            print(f"✅ File transfer completed successfully.")
+        except subprocess.CalledProcessError:
+            print(f"❌ERROR: Failed to transfer file")
+            sys.exit(1)
+
+    def scp_from_instance(self, instance_id: str, remote_path: str, local_path: str, key_path: str | None = None, user: str = "ubuntu") -> None:
+        """
+        Transfers a file from the EC2 instance to the local machine using SCP.
+
+        :param instance_id: The ID of the EC2 instance.
+        :param remote_path: Path to the file on the instance.
+        :param local_path: Path where the file should be saved locally.
+        :param key_path: Optional path to the SSH private key file. If not provided, will use SSH config.
+        :param user: The username to connect with (defaults to 'ubuntu').
+        """
+        try:
+            # Get the instance's public DNS
+            public_dns = self.get_instance_public_dns(instance_id)
+            if not public_dns:
+                print(f"❌ERROR: Could not find public DNS for instance {instance_id}")
+                sys.exit(1)
+
+            print(f"📥 Transferring file from instance {instance_id}...")
+            print(f"👤 User: {user}")
+            print(f"📁 Remote path: {remote_path}")
+            print(f"📁 Local path: {local_path}")
+
+            # Construct the SCP command
+            scp_command = ["scp"]
+            
+            # Add key file if provided
+            if key_path:
+                print(f"🔑 Using key file: {key_path}")
+                scp_command.extend(["-i", key_path])
+            
+            # Add the source and destination
+            scp_command.extend([f"{user}@{public_dns}:{remote_path}", local_path])
+
+            # Execute the SCP command
+            subprocess.run(scp_command, check=True)
+            print(f"✅ File transfer completed successfully.")
+        except subprocess.CalledProcessError:
+            print(f"❌ERROR: Failed to transfer file")
             sys.exit(1)

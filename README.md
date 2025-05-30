@@ -1,100 +1,132 @@
-# 🔧 ssm – Simple EC2 SSM CLI
-ssm is a lightweight Python CLI tool to interact with AWS EC2 instances over Systems Manager (SSM). It helps you quickly list, connect to, and manage EC2 instances using AWS named profiles.
+# SSM and SSMC - AWS Systems Manager CLI Tools
 
-## 🚀 Features
-- 🔌 Connect to EC2 instances via AWS SSM (interactive shell)
-- 📦 Send commands to one or more EC2 instances in parallel
-- 📊 Live progress bars and output summaries for batch commands
-- 🔁 Port forwarding through SSM tunnel
-- 🛰️ Forward to remote hosts via the EC2 tunnel
+A set of Python CLI tools to interact with AWS EC2 instances and ECS containers over Systems Manager (SSM). These tools help you quickly list, connect to, and manage AWS resources using AWS named profiles.
 
----
+## Overview
 
-## 🛠 Installation
-1. Clone the repo:
+SSM and SSMC are interactive CLI tools that leverage AWS Systems Manager Session Manager to provide secure access to your AWS resources. They allow you to:
+- Connect to EC2 instances and ECS containers without opening inbound ports
+- Send commands to multiple instances in parallel
+- Set up port forwarding through SSM tunnels
+- Manage ECS containers with interactive shells
+- Transfer files securely using SCP
 
+## Prerequisites
+
+### EC2 Instances
+- [Required] AWS SSM agent installed on EC2 instances
+- [Required] IAM role with `AmazonSSMManagedInstanceCore` policy attached
+- [Required] For SSH/SCP features: SSM agent version 2.3.672.0 or later
+
+### ECS Containers
+- [Required] ECS tasks must have the necessary IAM permissions for SSM
+- [Required] Container must have a shell available (bash by default)
+
+### User Permissions
+Required IAM permissions:
+- `ec2:DescribeInstances`
+- `ssm:StartSession`
+- `ssm:TerminateSession`
+- `ssm:DescribeSessions`
+- `ssm:DescribeInstanceInformation`
+- `ssm:DescribeInstanceProperties`
+- `ssm:GetConnectionStatus`
+- `ecs:ListClusters`
+- `ecs:ListServices`
+- `ecs:ListTasks`
+- `ecs:DescribeTasks`
+
+Optional permissions:
+- `ec2:DescribeRegions` (for cross-region operations)
+
+## Installation
+
+1. Clone the repository:
 ```bash
-git clone https://github.com/your-username/ssm.git
-cd ssm
+git clone https://github.com/your-username/ssm-cli.git
+cd ssm-cli
 ```
 
-2. Install dependencies:
+2. Install the tools:
 ```bash
-pip install -r requirements.txt
-```
-
-3. (Optional) Install the CLI globally:
-```bash
-make build
+# Install both tools
 make install
+
+# Or install specific tools
+make install-ssm    # Install only SSM
+make install-ssmc   # Install only SSMC
 ```
 
-Now you can run ssm from anywhere!
+## Usage
 
----
+### SSM (EC2 Management)
 
-## 🧑‍💻 Usage
-If not globally installed:
-```bash
-python3 ssm.py [COMMAND] [OPTIONS]
-```
-If installed globally:
 ```bash
 ssm [COMMAND] [OPTIONS]
 ```
 
 Available commands:
-
-- `send-command` – Run a shell command on an instance
-
+- `send-command` – Run a shell command on one or more instances
 - `port-forward` – Start local port forwarding
-
 - `port-forward-remote` – Forward a port from the instance to another destination
-
+- `ssh` – Connect to an instance via SSH over SSM
+- `scp-to` – Copy files to an instance
 - (none) – If no command is given, opens an interactive SSM shell
 
-## 📦 Send a Command
-Run a shell command on one or more instances:
+#### Examples
+
+Send a command to multiple instances:
 ```bash
 ssm send-command -i i-0123 i-0456 -p myprofile -c 'echo "hello world"'
 ```
-You can also pass instance names (resolved by tag Name):
+
+Port forwarding:
 ```bash
-ssm send-command -i instance-name-1 instance-name-2 -p myprofile -c "uptime"
+ssm port-forward -i i-0abcd1234efgh5678 -P 8080:3000 --profile myprofile
 ```
 
-## 🔁 Port Forwarding
-Forward a local port to the EC2 instance:
+SSH connection:
 ```bash
-ssm port-forward -i i-0abcd1234efgh5678 --local-port 8080 --remote-port 3000 --profile myprofile
+ssm ssh -i i-0abcd1234efgh5678 -k ~/.ssh/id_rsa --profile myprofile
 ```
 
-## 🔁 Port Forwarding to remote host
-Forward local port to a remote host:port via the EC2 instance:
+### SSMC (ECS Container Management)
+
 ```bash
-ssm port-forward-remote --instance i-0abcd1234efgh5678 --local-port 8080 --remote-port 3000 --host host --profile myprofile
+ssmc [COMMAND] [OPTIONS]
 ```
 
----
+Available commands:
+- `port-forward` – Start port forwarding to a container
+- (none) – If no command is given, opens an interactive shell in the container
 
+#### Examples
 
-## 📁 Project Structure
-
+Connect to a container:
 ```bash
-ssm/
-├── cli.py
-├── main.py
+ssmc -p myprofile -c my-cluster -s my-service
+```
+
+Port forwarding to a container:
+```bash
+ssmc port-forward -p myprofile -c my-cluster -s my-service -P 9999:9000
+```
+
+## Project Structure
+
+```
+ssm-cli/
+├── cli.py          # Common CLI utilities
+├── ssm.py          # EC2 instance management
+├── ssmc.py         # ECS container management
 ├── utils/
-│   └── ec2.py
-├── Makefile
-├── requirements.txt
-└── README.md
+│   ├── ec2.py      # EC2 client utilities
+│   └── ecs.py      # ECS client utilities
+├── Makefile        # Build and installation
+├── requirements.txt # Python dependencies
+└── README.md       # This file
 ```
 
----
+## License
 
-
-```
-
-## 📜 License
-MIT licence
+MIT License - See [LICENSE](LICENSE) file for details

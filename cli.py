@@ -8,7 +8,9 @@ def build_parser():
   ssm.py send-command -p myprofile -i i-123456 -c "uptime"
   ssm.py port-forward -p myprofile -i web-server -P 8080:80
   ssm.py port-forward-remote -p myprofile -i db-server -P 3306:3306 -d 127.0.0.1
-  ssm.py -p devprofile        # Opens interactive SSM session
+  ssm.py ssh -p myprofile -i web-server
+  ssm.py scp-to -p myprofile -i web-server -lp /local/file.txt -rp /remote/file.txt
+  ssm.py scp-from -p myprofile -i web-server -lp /local/file.txt -rp /remote/file.txt
 """
     )
 
@@ -19,8 +21,11 @@ def build_parser():
              "  send-command         Run a shell command on an instance\n"
              "  port-forward         Start local port forwarding to an instance\n"
              "  port-forward-remote  Forward a port from the instance to another destination\n"
+             "  ssh                  Open an SSH session to an instance\n"
+             "  scp-to              Transfer a file to an instance\n"
+             "  scp-from            Transfer a file from an instance\n"
              "\nIf omitted, opens an interactive shell via SSM.",
-        choices=["send-command", "port-forward", "port-forward-remote"],
+        choices=["send-command", "port-forward", "port-forward-remote", "ssh", "scp-to", "scp-from"],
         nargs="?",
         default=None
     )
@@ -60,6 +65,31 @@ def build_parser():
     parser.add_argument(
         "-r", "--region",
         help="AWS region to use (defaults to profile's region)",
+        required=False
+    )
+
+    parser.add_argument(
+        "-k", "--key",
+        help="Path to the SSH private key file",
+        required=False
+    )
+
+    parser.add_argument(
+        "-u", "--user",
+        help="SSH username (defaults to 'ubuntu')",
+        required=False,
+        default="ubuntu"
+    )
+
+    parser.add_argument(
+        "-lp", "--local-path",
+        help="Local file path for SCP operations",
+        required=False
+    )
+
+    parser.add_argument(
+        "-rp", "--remote-path",
+        help="Remote file path for SCP operations",
         required=False
     )
 

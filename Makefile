@@ -17,30 +17,47 @@ help:
 
 ##@ Build
 
-build: ## Create virtual environment and install dependencies
-	@echo -e "$(YELLOW)🔧 Checking virtual environment...$(RESET)"
-	@if [ ! -d "./venv" ]; then \
-		echo -e "$(GREEN)📦 Creating venv...$(RESET)"; \
-		python3 -m venv venv; \
-	fi
-	@echo -e "$(GREEN)📥 Installing dependencies...$(RESET)"
-	venv/bin/pip install -r requirements.txt > /dev/null
-	venv/bin/pip install pyinstaller
+build-ssm: ## Build SSM CLI
+	@echo -e "$(YELLOW)🔧 Building SSM CLI...$(RESET)"
 	venv/bin/pyinstaller --paths "venv/lib/python3.*/site-packages" --bootloader-ignore-signals -y ssm.py
-	@echo -e "$(GREEN)✅ Done.$(RESET)"
+	@echo -e "$(GREEN)✅ SSM CLI built.$(RESET)"
+
+build-ssmc: ## Build SSMC CLI
+	@echo -e "$(YELLOW)🔧 Building SSMC CLI...$(RESET)"
+	venv/bin/pyinstaller --paths "venv/lib/python3.*/site-packages" --bootloader-ignore-signals -y ssmc.py
+	@echo -e "$(GREEN)✅ SSMC CLI built.$(RESET)"
+
+build: build-ssm build-ssmc ## Build both SSM and SSMC CLIs
 
 ##@ Install
 
-install: ## Install the CLI to /usr/local/bin
+install-ssm: build-ssm ## Install SSM CLI to /usr/local/bin
 	@echo -e "$(GREEN)🔗 Installing 'ssm' command...$(RESET)"
 	@cp -r dist/ssm/* /usr/local/bin
 	@echo -e "$(GREEN)✅ Installed as 'ssm'$(RESET)"
 
-uninstall: ## Remove the CLI from /usr/local/bin
+install-ssmc: build-ssmc ## Install SSMC CLI to /usr/local/bin
+	@echo -e "$(GREEN)🔗 Installing 'ssmc' command...$(RESET)"
+	@cp -r dist/ssmc/* /usr/local/bin
+	@echo -e "$(GREEN)✅ Installed as 'ssmc'$(RESET)"
+
+install: install-ssm install-ssmc ## Install both SSM and SSMC CLIs
+
+##@ Uninstall
+
+uninstall-ssm: ## Remove SSM CLI from /usr/local/bin
 	@echo -e "$(YELLOW)🧹 Removing 'ssm' from /usr/local/bin...$(RESET)"
 	@rm -f /usr/local/bin/ssm
 	@rm -f /usr/local/bin/_internal
-	@echo -e "$(GREEN)✅ Uninstalled$(RESET)"
+	@echo -e "$(GREEN)✅ SSM CLI uninstalled$(RESET)"
+
+uninstall-ssmc: ## Remove SSMC CLI from /usr/local/bin
+	@echo -e "$(YELLOW)🧹 Removing 'ssmc' from /usr/local/bin...$(RESET)"
+	@rm -f /usr/local/bin/ssmc
+	@rm -f /usr/local/bin/_internal
+	@echo -e "$(GREEN)✅ SSMC CLI uninstalled$(RESET)"
+
+uninstall: uninstall-ssm uninstall-ssmc ## Remove both SSM and SSMC CLIs
 
 ##@ Docker
 
@@ -53,10 +70,10 @@ run/docker: ## Run the tool inside a Docker container (Ubuntu + Python)
 
 ##@ Utility
 
-clean: ## Removevenv and Python artifacts
+clean: ## Remove venv and Python artifacts
 	@echo -e "$(YELLOW)🧼 Cleaning up...$(RESET)"
 	@rm -rf venv
 	@rm -rf dist/ build/
-	@rm -f ssm.spec
+	@rm -f ssm.spec ssmc.spec
 	@find . -type d -name "__pycache__" -exec rm -r {} + 2>/dev/null || true
 	@echo -e "$(GREEN)✅ Cleaned$(RESET)"
