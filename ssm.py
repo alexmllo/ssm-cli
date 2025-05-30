@@ -87,7 +87,29 @@ def main():
                     print(f"❌ERROR: No instance found with name '{instance}'.")
                     sys.exit(1)
 
-        client.send_command(instances_ids, args.shell_comand)
+        client.send_command(instances_ids, args.shell_comand, args.user)
+
+    # SSH
+    elif args.command == "ssh":
+        if not args.key:
+            parser.error("❌ERROR: SSH key is required for SSH.")
+        if args.instances > 1:
+            parser.error("❌ERROR: Only one instance is allowed for SSH.")
+        
+        if args.instances:
+            instance_id = args.instances[0]
+            if instance_id.startswith("i-"):
+                instance_id = args.instances[0]
+            else:
+                instance_id = client.get_instance_id_by_name(instance_id)
+        else:
+            instance_id = select_instance(client)
+        
+        client.ssh_to_instance(
+            instance_id=instance_id,
+            key_path=args.key,
+            user=args.user or "ubuntu"
+        )
 
     # PORT FORWARD
     elif args.command == "port-forward":
@@ -158,6 +180,56 @@ def main():
             instance_id = select_instance(client)
         
         client.port_forwarding_to_remote_host(instance_id, args.destination, remote_port, local_port)
+
+    # SCP TO INSTANCE
+    elif args.command == "scp-to":
+        if not args.local_path or not args.remote_path:
+            parser.error("❌ERROR: Both local and remote paths are required for scp-to.")
+        if len(args.instances) > 1:
+            parser.error("❌ERROR: Only one instance is allowed for for scp-to.")
+
+        if args.instances:
+            instance_id = args.instances[0]
+            if not instance_id.startswith("i-"):
+                instance_id = client.get_instance_id_by_name(instance_id)
+                if not instance_id:
+                    print(f"❌ERROR: No instance found with name '{args.instances[0]}'.")
+                    sys.exit(1)
+        else:
+            instance_id = select_instance(client)
+
+        client.scp_to_instance(
+            instance_id=instance_id,
+            local_path=args.local_path,
+            remote_path=args.remote_path,
+            key_path=args.key,
+            user=args.user
+        )
+
+    # SCP FROM INSTANCE
+    elif args.command == "scp-from":
+        if not args.local_path or not args.remote_path:
+            parser.error("❌ERROR: Both local and remote paths are required for scp-from.")
+        if len(args.instances) > 1:
+            parser.error("❌ERROR: Only one instance is allowed for for scp-from.")
+
+        if args.instances:
+            instance_id = args.instances[0]
+            if not instance_id.startswith("i-"):
+                instance_id = client.get_instance_id_by_name(instance_id)
+                if not instance_id:
+                        print(f"❌ERROR: No instance found with name '{args.instances[0]}'.")
+                        sys.exit(1)
+        else:
+            instance_id = select_instance(client)
+
+        client.scp_from_instance(
+            instance_id=instance_id,
+            remote_path=args.remote_path,
+            local_path=args.local_path,
+            key_path=args.key,
+            user=args.user
+        )
 
     # LIST INSTANCES OF A PROFILE
     elif args.command == None:
