@@ -1,68 +1,8 @@
 import argparse
 import sys
-from utils.ecs import ECSClient
+from utils.ecs.ecs import ECSClient
 import boto3
-
-def build_parser():
-    parser = argparse.ArgumentParser(
-        description="🛠️ ssmc: Simplified AWS SSM ECS Container interaction",
-        formatter_class=argparse.RawTextHelpFormatter,
-        epilog="""Examples:
-  ssmc -p myprofile -c my-cluster -s my-service
-  ssmc -p myprofile -c my-cluster
-  ssmc port-forward -p myprofile -c my-cluster -s my-service -P 9999:9000
-"""
-    )
-
-    parser.add_argument(
-        "command",
-        metavar="COMMAND",
-        help="Available commands:\n"
-             "  port-forward         Start port forwarding to a container\n"
-             "\nIf omitted, opens an interactive shell via SSM.",
-        choices=["port-forward"],
-        nargs="?",
-        default=None
-    )
-
-    parser.add_argument(
-        "-c", "--cluster",
-        help="ECS cluster name",
-        required=False
-    )
-
-    parser.add_argument(
-        "-s", "--service",
-        help="ECS service name (optional)",
-        required=False
-    )
-
-    parser.add_argument(
-        "-p", "--profile",
-        help="AWS named profile to use (required)",
-        required=True
-    )
-
-    parser.add_argument(
-        "-P", "--port",
-        help="Port mapping for forwarding, format: LOCAL:REMOTE (e.g. 9000:9000)",
-        required=False
-    )
-
-    parser.add_argument(
-        "--shell",
-        help="Shell to use in the container (default: bash)",
-        default="bash",
-        required=False
-    )
-
-    parser.add_argument(
-        "-r", "--region",
-        help="AWS region to use (defaults to profile's region)",
-        required=False
-    )
-
-    return parser
+from cli import build_ssmc_parser
 
 def multichoice(list_of_items: list, item_type: str = "item") -> str:
     """
@@ -78,14 +18,19 @@ def multichoice(list_of_items: list, item_type: str = "item") -> str:
 
     if len(list_of_items) == 1:
         if item_type == "task":
-            print(f"🔎 Only one {item_type} found: {list_of_items[0]['display']}")
-            return list_of_items[0]
+            print(f"🔎 Only one {item_type} found: {list_of_items[0]['Name']} ({list_of_items[0]['Id']})")
+            decision = input("Do you want to select this task? (y/n): ").strip()
+            if decision == "yes" or decision == "y":
+                return list_of_items[0]
+            else:
+                print("❌ Task selection cancelled.")
+                sys.exit(1)
         print(f"🔎 Only one {item_type} found: {list_of_items[0]}")
         return list_of_items[0]
 
     # Sort items alphabetically
     if item_type == "task":
-        list_of_items.sort(key=lambda x: x['display'])
+        list_of_items.sort(key=lambda x: x['Name'])
     else:
         list_of_items.sort()
 
@@ -93,7 +38,7 @@ def multichoice(list_of_items: list, item_type: str = "item") -> str:
     print(f"\nAvailable {item_type}s:")
     for index, item in enumerate(list_of_items, 1):
         if item_type == "task":
-            print(f"{index}.\t\t {item['display']}")
+            print(f"{index}.\t\t {item['Name']} ({item['Id']}) - Created: {item['Time']}")
         else:
             print(f"{index}.\t\t {item}")
 
@@ -107,8 +52,6 @@ def multichoice(list_of_items: list, item_type: str = "item") -> str:
 
             choice_num = int(choice)
             if 1 <= choice_num <= len(list_of_items):
-                if item_type == "task":
-                    return list_of_items[choice_num - 1]
                 return list_of_items[choice_num - 1]
             else:
                 print(f"❌ Invalid selection. Please choose a number between 1 and {len(list_of_items)}.")
@@ -119,7 +62,7 @@ def multichoice(list_of_items: list, item_type: str = "item") -> str:
             sys.exit(0)
 
 def main():
-    parser = build_parser()
+    parser = build_ssmc_parser()
     args = parser.parse_args()
 
     # CHECK PROFILE
@@ -160,14 +103,14 @@ def main():
         tasks = ecs_client.get_tasks_by_cluster(cluster, service)
         
         task = multichoice(tasks, "task")
-        ecs_client.start_port_forwarding(cluster, task['task_arn'], local_port, remote_port)
+        ecs_client.start_port_forwarding(cluster=cluster, task_id=task['Id'], container_id=task['ContainerId'], local_port=local_port, remote_port=remote_port)
 
     elif args.command == None:
         # Default to interactive shell
         tasks = ecs_client.get_tasks_by_cluster(cluster, service)
         
         task = multichoice(tasks, "task")
-        ecs_client.start_session(cluster, task['task_arn'], args.shell)
+        ecs_client.start_session(cluster=cluster, container_name=task['Name'], task_id=task['Id'], shell=args.shell)
 
 if __name__ == "__main__":
     try:

@@ -58,6 +58,7 @@ class ECSClient:
             self.login_to_source_profile(profile)
         
         self.region = region or self.session.region_name or "eu-west-1"
+        self.profile = profile
 
         print(f"Using profile: {profile}")
         print(f"Using region: {self.region}")
@@ -146,48 +147,42 @@ class ECSClient:
 
             # Get task details to include container information
             task_details = self.ecs.describe_tasks(cluster=cluster, tasks=tasks['taskArns'])
-            
             # Format task information for display
-            formatted_tasks = []
+            formatted_tasks: list[dict[str, str]] = []
             for task in task_details['tasks']:
                 task_arn = task['taskArn']
+                time = task['createdAt']
                 task_id = task_arn.split('/')[-1]
-                container = task['containers'][0] if task['containers'] else None
-                
-                if container:
-                    container_name = container['name']
-                    container_id = container['runtimeId']
-                    status = task['lastStatus']
-                    formatted_tasks.append({
-                        'task_arn': task_arn,
-                        'task_id': task_id,
-                        'container_name': container_name,
-                        'container_id': container_id,
-                        'status': status,
-                        'display': f"{task_id} ({container_name}) - {status}"
-                    })
-
+                for container in task['containers']:
+                    if 'runtimeId' in container:
+                        formatted_tasks.append({
+                            "Name": container['name'],
+                            "Id": task_id,
+                            "Time": time,
+                            "ContainerId": container['runtimeId'],
+                        })
             return formatted_tasks
         except Exception as e:
             print(f"❌ Error getting tasks: {str(e)}")
             sys.exit(1)
 
-    def start_port_forwarding(self, cluster: str, task: str, local_port: int, remote_port: int) -> None:
+    def start_port_forwarding(self, cluster: str, task_id: str, container_id: str, local_port: int, remote_port: int) -> None:
         """
         Start port forwarding to a container.
         
         :param cluster: The cluster name or ARN
-        :param task: The task ARN or ID
+        :param task_id: The task ID
+        :param container_id: The container ID
         :param local_port: Local port number
         :param remote_port: Remote port number
         """
         try:
-            print(f"🔗 Setting up port forwarding {local_port}:{remote_port} to container in task {task}...")
+            print(f"🔗 Setting up port forwarding {local_port}:{remote_port} to container in task {task_id} ({container_id})...")
             subprocess.run(
                 [
                     "aws", "ssm", "start-session",
-                    "--target", task,
-                    "--profile", self.session.profile_name,
+                    "--target", f"ecs:{cluster}_{task_id}_{container_id}",
+                    "--profile", self.profile_name,
                     "--document-name", "AWS-StartPortForwardingSession",
                     "--region", self.region,
                     "--parameters", f"portNumber=[\"{remote_port}\"],localPortNumber=[\"{local_port}\"]"
@@ -196,31 +191,34 @@ class ECSClient:
             )
             print(f"✅ Port forwarding ended successfully.")
         except subprocess.CalledProcessError:
-            print(f"❌ Failed to start port forwarding with container in task {task}.")
+            print(f"❌ Failed to start port forwarding with container in task {task_id} ({container_id}).")
             sys.exit(1)
 
-    def start_session(self, cluster: str, task: str, shell: str = "bash") -> None:
+    def start_session(self, cluster: str, container_name: str, task_id: str, shell: str = "bash") -> None:
         """
         Start an SSM session to a container.
         
         :param cluster: The cluster name or ARN
-        :param task: The task ARN or ID
+        :param container_name: The container name
+        :param task_id: The task ID
         :param shell: The shell to use (default: bash)
         """
         try:
-            print(f"🔗 Connecting to container in task {task} via SSM...")
+            print(f"🔗 Connecting to container {task_id} ({container_name}) via SSM...")
             subprocess.run(
                 [
-                    "aws", "ssm", "start-session",
-                    "--target", task,
-                    "--profile", self.session.profile_name,
-                    "--document-name", "AWS-StartInteractiveCommand",
+                    "aws", "ecs", "execute-command",
+                    "--cluster", cluster,
+                    "--profile", self.profile,
+                    "--container", container_name,
+                    "--task", task_id,
+                    "--command", shell,
                     "--region", self.region,
-                    "--parameters", f"command=[\"{shell}\"]"
+                    "--interactive"
                 ],
                 check=True
             )
             print(f"✅ Session ended successfully.")
         except subprocess.CalledProcessError:
-            print(f"❌ Failed to start session with container in task {task}.")
+            print(f"❌ Failed to start session with container in task {task_id} ({container_name}).")
             sys.exit(1)

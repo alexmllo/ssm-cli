@@ -1,9 +1,8 @@
 import sys
-from threading import local
 
 import boto3
-from cli import build_parser
-import utils.ec2 as ec2
+from cli import build_ssm_parser
+import utils.ec2.ec2 as ec2
 import readline
 
 def select_instance(client: ec2.EC2Client, instance_name: str = None) -> str:
@@ -51,7 +50,7 @@ def select_instance(client: ec2.EC2Client, instance_name: str = None) -> str:
         sys.exit(1)
 
 def main():
-    parser = build_parser()
+    parser = build_ssm_parser()
     args = parser.parse_args()
 
     # CHECK PROFILE
@@ -62,6 +61,7 @@ def main():
     else:
         print(f"❌ ERROR: Profile '{args.profile}' not found in available AWS profiles.")
         print(f"Available profiles: {', '.join(available_profiles)}")
+        print("")
         parser.print_help()
         sys.exit(1)
 

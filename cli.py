@@ -1,6 +1,6 @@
 import argparse
 
-def build_parser():
+def build_ssm_parser():
     parser = argparse.ArgumentParser(
         description="🛠️ ssm-cli: Simplified AWS SSM EC2 interaction",
         formatter_class=argparse.RawTextHelpFormatter,
@@ -90,6 +90,67 @@ def build_parser():
     parser.add_argument(
         "-rp", "--remote-path",
         help="Remote file path for SCP operations",
+        required=False
+    )
+
+    return parser
+
+def build_ssmc_parser():
+    parser = argparse.ArgumentParser(
+        description="🛠️ ssmc: Simplified AWS SSM ECS Container interaction",
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog="""Examples:
+  ssmc -p myprofile -c my-cluster -s my-service
+  ssmc -p myprofile -c my-cluster
+  ssmc port-forward -p myprofile -c my-cluster -s my-service -P 9999:9000
+"""
+    )
+
+    parser.add_argument(
+        "command",
+        metavar="COMMAND",
+        help="Available commands:\n"
+             "  port-forward         Start port forwarding to a container\n"
+             "\nIf omitted, opens an interactive shell via SSM.",
+        choices=["port-forward"],
+        nargs="?",
+        default=None
+    )
+
+    parser.add_argument(
+        "-c", "--cluster",
+        help="ECS cluster name",
+        required=False
+    )
+
+    parser.add_argument(
+        "-s", "--service",
+        help="ECS service name (optional)",
+        required=False
+    )
+
+    parser.add_argument(
+        "-p", "--profile",
+        help="AWS named profile to use (required)",
+        required=True
+    )
+
+    parser.add_argument(
+        "-P", "--port",
+        help="Port mapping for forwarding, format: LOCAL:REMOTE (e.g. 9000:9000)",
+        required=False
+    )
+
+    parser.add_argument(
+        "--shell",
+        help="Shell to use in the container (default: bash)",
+        default="bash",
+        required=False
+    )
+
+    parser.add_argument(
+        "-r", "--region",
+        help="AWS region to use (defaults to profile's region)",
         required=False
     )
 
